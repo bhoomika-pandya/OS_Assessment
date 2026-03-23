@@ -59,3 +59,81 @@ list_top_memory_processes() {
     
     log_action "Listed top 10 memory consuming processes"
 }
+
+# Function to terminate a selected process with safeguards
+terminate_process() {
+    echo ""
+    read -p "Enter PID of process to terminate: " pid
+    
+    # Validate PID is a number
+    if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid PID. Please enter a numeric process ID."
+        log_action "Invalid PID entered: $pid"
+        return
+    fi
+    
+    # Check if process exists (Windows: use tasklist)
+    proc_line=$(tasklist /FI "PID eq $pid" /FO CSV /NH 2>/dev/null | tr -d '\r' | grep -v "^$" | head -1)
+    if [ -z "$proc_line" ] || echo "$proc_line" | grep -qi "No tasks"; then
+        echo "Error: No process found with PID $pid."
+        log_action "Process termination failed: PID $pid does not exist"
+        return
+    fi
+
+    # Get process information from tasklist CSV output
+    proc_name=$(echo "$proc_line" | cut -d',' -f1 | tr -d '"')
+    proc_user=$(powershell.exe -NoProfile -Command "(Get-Process -Id $pid -ErrorAction SilentlyContinue).UserName" 2>/dev/null | tr -d '\r' || echo "N/A")
+    
+    # List of critical PIDs that should never be terminated
+    critical_pids=(1)
+    for cp in "${critical_pids[@]}"; do
+        if [ "$pid" -eq "$cp" ]; then
+            echo "Error: Cannot terminate critical system process (PID $pid)."
+            echo "This is a protected process essential for system operation."
+            log_action "BLOCKED: Attempted to terminate critical process PID $pid ($proc_name)"
+            return
+        fi
+    done
+    
+    # List of critical process names that should never be terminated
+    case "$proc_name" in
+        init|systemd|kthreadd|rcu_sched|ksoftirqd|migration|watchdog|kworker)
+            echo "Error: Cannot terminate critical system process '$proc_name'."
+            echo "This process is essential for system operation."
+            log_action "BLOCKED: Attempted to terminate critical process $proc_name (PID $pid)"
+            return
+            ;;
+    esac
+    
+    # Display process details and request confirmation
+    echo ""
+    echo "Process Details:"
+    echo "  PID: $pid"
+    echo "  Name: $proc_name"
+    echo "  User: $proc_user"
+    echo ""
+    
+    read -p "Are you sure you want to terminate this process? (Y/N): " confirm
+    
+    case "$confirm" in
+        [Yy]|[Yy][Ee][Ss])
+            if taskkill /PID "$pid" /F > /dev/null 2>&1; then
+                echo "Success: Process $pid ($proc_name) has been terminated."
+                log_action "TERMINATED: Process PID $pid ($proc_name) by user"
+            else
+                echo "Error: Failed to terminate process $pid."
+                echo "This may be due to insufficient permissions or the process already exited."
+                log_action "FAILED: Could not terminate process PID $pid ($proc_name)"
+            fi
+            ;;
+        [Nn]|[Nn][Oo])
+            echo "Termination cancelled."
+            log_action "CANCELLED: Termination of process PID $pid ($proc_name) cancelled by user"
+            ;;
+        *)
+            echo "Invalid input. Termination cancelled."
+            log_action "CANCELLED: Invalid confirmation input for PID $pid termination"
+            ;;
+    esac
+    echo ""
+}
