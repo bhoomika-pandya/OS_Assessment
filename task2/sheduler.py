@@ -277,3 +277,66 @@ def priority_scheduling() -> None:
     print("=" * 70 + "\n")
     
     log_event(f"Priority scheduling completed: {len(sorted_jobs)} job(s) processed")
+
+
+def view_completed_jobs() -> None:
+    """Display all completed jobs."""
+    if not os.path.exists(COMPLETED_JOBS_FILE):
+        print("\nNo completed jobs recorded yet.\n")
+        return
+    
+    try:
+        with open(COMPLETED_JOBS_FILE, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        
+        if not lines:
+            print("\nNo completed jobs recorded yet.\n")
+            return
+        
+        print("\n" + "=" * 90)
+        print("                              COMPLETED JOBS")
+        print("=" * 90)
+        print(
+            f"{'Timestamp':<20} {'Student ID':<12} {'Job Name':<20} "
+            f"{'Time(s)':<8} {'Priority':<8} {'Algorithm':<12}"
+        )
+        print("-" * 90)
+        
+        for line in lines:
+            parts = line.split("|")
+            if len(parts) == 6:
+                timestamp, student_id, job_name, exec_time, priority, algorithm = parts
+                print(
+                    f"{timestamp:<20} {student_id:<12} {job_name:<20} "
+                    f"{exec_time:<8} {priority:<8} {algorithm:<12}"
+                )
+        
+        print("=" * 90 + "\n")
+        log_event(f"Viewed {len(lines)} completed job(s)")
+    
+    except Exception as e:
+        print(f"Error reading completed jobs: {e}")
+
+def process_job_queue() -> None:
+    """Prompt user to select scheduling algorithm and process the queue."""
+    jobs = load_jobs()
+    
+    if not jobs:
+        print("\nNo jobs in queue to process.\n")
+        return
+    
+    print("\n" + "=" * 70)
+    print("                    SELECT SCHEDULING ALGORITHM")
+    print("=" * 70)
+    print("1) Round Robin (Time Quantum = 5 seconds)")
+    print("2) Priority Scheduling (Highest priority first)")
+    print("")
+    
+    choice = input("Enter your choice [1-2]: ").strip()
+    
+    if choice == "1":
+        round_robin_scheduling()
+    elif choice == "2":
+        priority_scheduling()
+    else:
+        print("\nInvalid choice. Returning to main menu.\n")
