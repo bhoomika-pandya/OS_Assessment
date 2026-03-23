@@ -39,3 +39,18 @@ def load_accounts() -> dict:
     except (json.JSONDecodeError, IOError):
         return {}
 
+
+def is_account_locked(account: dict) -> bool:
+    """Check if an account is currently locked out."""
+    if account.get("failed_attempts", 0) >= MAX_FAILED_ATTEMPTS:
+        lockout_time_str = account.get("lockout_time")
+        if lockout_time_str:
+            lockout_time = datetime.strptime(lockout_time_str, "%Y-%m-%d %H:%M:%S")
+            elapsed = (datetime.now() - lockout_time).total_seconds() / 60
+            if elapsed < LOCKOUT_DURATION_MINUTES:
+                remaining = int(LOCKOUT_DURATION_MINUTES - elapsed)
+                return True, remaining
+            else:
+                # Lockout expired, reset
+                return False, 0
+    return False, 0
