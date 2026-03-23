@@ -221,3 +221,73 @@ inspect_disk_and_logs() {
     
     echo ""
 }
+
+# Function to handle graceful exit with confirmation
+bye_exit() {
+    echo ""
+    read -p "Are you sure you want to exit? (Y/N): " confirm
+    
+    case "$confirm" in
+        [Yy]|[Yy][Ee][Ss])
+            echo ""
+            echo "Bye"
+            log_action "System monitor exited by user"
+            exit 0
+            ;;
+        [Nn]|[Nn][Oo])
+            echo "Exit cancelled. Returning to main menu."
+            ;;
+        *)
+            echo "Invalid input. Exit cancelled."
+            ;;
+    esac
+}
+
+# Main menu loop
+main_menu() {
+    while true; do
+        echo ""
+        echo "========================================================="
+        echo "  University Data Centre Process and Resource Management"
+        echo "========================================================="
+        echo ""
+        echo "1) Display current CPU and memory usage"
+        echo "2) List top ten memory consuming processes"
+        echo "3) Terminate a process"
+        echo "4) Disk inspection and log archiving"
+        echo "5) Bye (exit)"
+        echo ""
+        read -p "Enter your choice [1-5]: " choice
+        
+        case "$choice" in
+            1)
+                show_cpu_memory
+                ;;
+            2)
+                list_top_memory_processes
+                ;;
+            3)
+                terminate_process
+                ;;
+            4)
+                inspect_disk_and_logs
+                ;;
+            5)
+                bye_exit
+                ;;
+            *)
+                echo ""
+                echo "Invalid option. Please select a number between 1 and 5."
+                ;;
+        esac
+    done
+}
+
+# Initialize log file if it doesn't exist
+if [ ! -f "$LOG_FILE" ]; then
+    touch "$LOG_FILE"
+    log_action "System monitor initialized"
+fi
+
+# Start the main menu
+main_menu
