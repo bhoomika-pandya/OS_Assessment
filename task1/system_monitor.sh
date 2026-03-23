@@ -38,3 +38,24 @@ show_cpu_memory() {
     
     log_action "Viewed CPU and memory usage statistics"
 }
+
+
+# Function to list top 10 memory consuming processes
+list_top_memory_processes() {
+    echo ""
+    echo "==== Top 10 Memory Consuming Processes ===="
+    echo ""
+    printf "%-8s %-8s %-12s %s\n" "PID" "MEM_MB" "CPU_SEC" "PROCESS"
+    echo "------------------------------------------------------------"
+    powershell.exe -NoProfile -Command "
+        \$procs = Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10;
+        foreach (\$p in \$procs) {
+            \$mem = [math]::Round(\$p.WorkingSet64/1MB, 1);
+            \$cpu = try { [math]::Round(\$p.TotalProcessorTime.TotalSeconds, 1) } catch { 0 };
+            Write-Host (\$p.Id.ToString().PadRight(8) + \$mem.ToString().PadRight(10) + \$cpu.ToString().PadRight(14) + \$p.ProcessName)
+        }
+    " 2>/dev/null | tr -d '\r'
+    echo ""
+    
+    log_action "Listed top 10 memory consuming processes"
+}
