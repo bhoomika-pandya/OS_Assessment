@@ -340,3 +340,55 @@ def process_job_queue() -> None:
         priority_scheduling()
     else:
         print("\nInvalid choice. Returning to main menu.\n")
+
+ef bye_exit() -> None:
+    """Handle graceful exit with confirmation."""
+    print("")
+    confirm = input("Are you sure you want to exit? (Y/N): ").strip().upper()
+    
+    if confirm in ["Y", "YES"]:
+        print("\nBye")
+        log_event("Job scheduler exited by user")
+        sys.exit(0)
+    elif confirm in ["N", "NO"]:
+        print("Exit cancelled. Returning to main menu.\n")
+    else:
+        print("Invalid input. Exit cancelled.\n")
+
+def main_menu() -> None:
+    """Display main menu and handle user interaction."""
+    while True:
+        print("=" * 70)
+        print("    University High Performance Computing Job Scheduler")
+        print("=" * 70)
+        print("")
+        print("1) View pending jobs")
+        print("2) Submit a job request")
+        print("3) Process job queue (Round Robin or Priority)")
+        print("4) View completed jobs")
+        print("5) Bye (exit)")
+        print("")
+        
+        choice = input("Enter your choice [1-5]: ").strip()
+        
+        if choice == "1":
+            view_pending_jobs()
+        elif choice == "2":
+            submit_job()
+        elif choice == "3":
+            process_job_queue()
+        elif choice == "4":
+            view_completed_jobs()
+        elif choice == "5":
+            bye_exit()
+        else:
+            print("\nInvalid option. Please choose a number between 1 and 5.\n")
+
+
+if __name__ == "__main__":
+    # Initialize log file if it doesn't exist
+    if not os.path.exists(SCHEDULER_LOG_FILE):
+        log_event("Job scheduler initialized")
+    
+    # Start the main menu
+    main_menu()
