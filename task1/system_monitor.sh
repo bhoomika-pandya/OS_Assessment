@@ -137,3 +137,87 @@ terminate_process() {
     esac
     echo ""
 }
+
+
+# Function to inspect disk usage and archive large log files
+inspect_disk_and_logs() {
+    echo ""
+    read -p "Enter directory path to inspect: " target_dir
+    
+    # Validate directory exists
+    if [ ! -d "$target_dir" ]; then
+        echo "Error: Directory '$target_dir' does not exist."
+        log_action "Disk inspection failed: Directory $target_dir not found"
+        return
+    fi
+    
+    echo ""
+    echo "==== Disk Usage for: $target_dir ===="
+    du -sh "$target_dir" 2>/dev/null
+    echo ""
+    
+    # Search for log files larger than 50MB
+    echo "Searching for log files larger than 50MB..."
+    mapfile -t large_logs < <(find "$target_dir" -type f -name "*.log" -size +50M 2>/dev/null)
+    
+    if [ "${#large_logs[@]}" -eq 0 ]; then
+        echo "No log files larger than 50MB found in this directory."
+        log_action "Disk inspection complete: No large log files in $target_dir"
+        return
+    fi
+    
+    echo ""
+    echo "Found ${#large_logs[@]} large log file(s):"
+    for logfile in "${large_logs[@]}"; do
+        size=$(ls -lh "$logfile" | awk '{print $5}')
+        echo "  - $logfile ($size)"
+    done
+    echo ""
+    
+    # Create ArchiveLogs directory if it doesn't exist
+    archive_dir="$target_dir/ArchiveLogs"
+    if [ ! -d "$archive_dir" ]; then
+        mkdir -p "$archive_dir"
+        echo "Created archive directory: $archive_dir"
+        log_action "Created ArchiveLogs directory at $archive_dir"
+    fi
+    
+    # Compress and archive large log files with timestamps
+    timestamp=$(date '+%Y%m%d_%H%M%S')
+    echo "Archiving large log files..."
+    
+    for logfile in "${large_logs[@]}"; do
+        base_name=$(basename "$logfile")
+        archive_name="${base_name%.log}_${timestamp}.log.gz"
+        
+        if gzip -c "$logfile" > "$archive_dir/$archive_name" 2>/dev/null; then
+            echo "  Archived: $logfile -> $archive_dir/$archive_name"
+            log_action "Archived log file: $logfile to $archive_dir/$archive_name"
+        else
+            echo "  Failed to archive: $logfile"
+            log_action "Failed to archive log file: $logfile"
+        fi
+    done
+    
+    echo ""
+    
+    # Check if ArchiveLogs exceeds 1GB and display warning
+    archive_size_bytes=$(du -sb "$archive_dir" 2>/dev/null | awk '{print $1}')
+    
+    if [ -n "$archive_size_bytes" ]; then
+        one_gb=$((1024*1024*1024))
+        
+        if [ "$archive_size_bytes" -gt "$one_gb" ]; then
+            archive_size_gb=$(awk -v b="$archive_size_bytes" 'BEGIN{printf "%.2f", b/1024/1024/1024}')
+            echo "WARNING: ArchiveLogs directory exceeds 1GB!"
+            echo "Current size: ${archive_size_gb}GB"
+            echo "Consider cleaning up old archived logs to free disk space."
+            log_action "WARNING: ArchiveLogs at $archive_dir exceeds 1GB (${archive_size_gb}GB)"
+        else
+            archive_size_mb=$(awk -v b="$archive_size_bytes" 'BEGIN{printf "%.2f", b/1024/1024}')
+            echo "Archive directory size: ${archive_size_mb}MB"
+        fi
+    fi
+    
+    echo ""
+}
