@@ -197,3 +197,111 @@ def view_login_history(log_file: str) -> None:
     except IOError:
         print("  Error reading login history.")
 
+def view_all_accounts(accounts: dict) -> None:
+    """Display all registered accounts and their status."""
+    print("\n  --- Registered Accounts ---")
+
+    if not accounts:
+        print("  No accounts registered yet.")
+        return
+
+    print(f"\n  {'USERNAME':<20} {'ROLE':<10} {'STATUS':<12} {'FAILED':<8} LAST LOGIN")
+    print("  " + "-" * 75)
+
+    for username, info in accounts.items():
+        locked, _ = get_lockout_status(info)
+        status = "LOCKED" if locked else "ACTIVE"
+        failed = info.get("failed_attempts", 0)
+        last_login = info.get("last_login") or "Never"
+        role = info.get("role", "student")
+        print(f"  {username:<20} {role:<10} {status:<12} {failed:<8} {last_login}")
+
+
+def unlock_account(accounts: dict) -> None:
+    """Manually unlock a locked account."""
+    print("\n  --- Unlock Account ---")
+    username = input("  Enter username to unlock: ").strip()
+
+    if username not in accounts:
+        print(f"  Error: Account '{username}' not found.")
+        return
+
+    accounts[username]["failed_attempts"] = 0
+    accounts[username]["lockout_time"] = None
+    save_accounts(accounts)
+    print(f"  Account '{username}' has been unlocked successfully.")
+    log_login_event(username, "UNLOCKED", "Account manually unlocked by admin")
+
+
+def view_submission_log(log_file: str) -> None:
+    """Display recent entries from the submission log."""
+    print("\n  --- Submission Activity Log ---")
+
+    if not os.path.exists(log_file):
+        print(f"  Log file not found: {log_file}")
+        return
+
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if not lines:
+            print("  No activity recorded yet.")
+            return
+
+        print(f"\n  Showing last 15 entries from: {log_file}")
+        print("  " + "-" * 80)
+        for line in lines[-15:]:
+            print(f"  {line.strip()}")
+    except IOError:
+        print("  Error reading submission log.")
+
+
+def main_menu(log_file: str) -> None:
+    """Display the login monitor main menu."""
+    accounts = load_accounts()
+
+    while True:
+        print("\n  ============================================================")
+        print("         LOGIN MONITOR & ACCOUNT MANAGEMENT")
+        print("  ============================================================")
+        print("  1. Login")
+        print("  2. Create Account")
+        print("  3. View Login History")
+        print("  4. View All Accounts")
+        print("  5. Unlock an Account")
+        print("  6. View Submission Activity Log")
+        print("  7. Back to Main Menu")
+        print("  ============================================================")
+
+        choice = input("  Enter your choice [1-7]: ").strip()
+
+        if choice == "1":
+            accounts = load_accounts()
+            login(accounts)
+        elif choice == "2":
+            accounts = load_accounts()
+            create_account(accounts)
+        elif choice == "3":
+            view_login_history(log_file)
+        elif choice == "4":
+            accounts = load_accounts()
+            view_all_accounts(accounts)
+        elif choice == "5":
+            accounts = load_accounts()
+            unlock_account(accounts)
+        elif choice == "6":
+            view_submission_log(log_file)
+        elif choice == "7":
+            print("\n  Returning to main menu...")
+            break
+        else:
+            print("\n  Invalid choice. Please select a number between 1 and 7.")
+
+        input("\n  Press Enter to continue...")
+
+
+if __name__ == "__main__":
+    # Receive submission log file path from secure_core.sh
+    log_file = sys.argv[1] if len(sys.argv) > 1 else "submission_log.txt"
+    main_menu(log_file)
