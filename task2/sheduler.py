@@ -109,3 +109,171 @@ def view_pending_jobs() -> None:
     
     print("=" * 70 + "\n")
     log_event(f"Viewed {len(jobs)} pending job(s)")
+
+
+def submit_job() -> None:
+    """Submit a new job request to the queue."""
+    print("\n" + "=" * 70)
+    print("                       SUBMIT NEW JOB")
+    print("=" * 70)
+    
+    student_id = input("Enter student ID: ").strip()
+    if not student_id:
+        print("Error: Student ID cannot be empty.")
+        return
+    
+    job_name = input("Enter job name: ").strip()
+    if not job_name:
+        print("Error: Job name cannot be empty.")
+        return
+    
+    # Validate execution time
+    try:
+        exec_time_input = input("Enter estimated execution time (seconds): ").strip()
+        exec_time = int(exec_time_input)
+        
+        if exec_time <= 0:
+            print("Error: Execution time must be a positive integer.")
+            return
+    except ValueError:
+        print("Error: Invalid execution time. Please enter a whole number.")
+        return
+    
+    # Validate priority
+    try:
+        priority_input = input("Enter priority (1-10, where 10 is highest): ").strip()
+        priority = int(priority_input)
+        
+        if priority < 1 or priority > 10:
+            print("Error: Priority must be between 1 and 10.")
+            return
+    except ValueError:
+        print("Error: Invalid priority. Please enter a number between 1 and 10.")
+        return
+    
+    # Append job to queue file
+    try:
+        with open(JOB_QUEUE_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{student_id}|{job_name}|{exec_time}|{priority}\n")
+        
+        print("\n✓ Job submitted successfully!")
+        print(f"  Student ID: {student_id}")
+        print(f"  Job Name: {job_name}")
+        print(f"  Execution Time: {exec_time} seconds")
+        print(f"  Priority: {priority}\n")
+        
+        log_event(
+            f"JOB_SUBMISSION | Student={student_id} | Job={job_name} | "
+            f"ExecTime={exec_time}s | Priority={priority}"
+        )
+    
+    except Exception as e:
+        print(f"Error: Failed to submit job: {e}")
+
+
+def round_robin_scheduling() -> None:
+    """Process jobs using Round Robin scheduling with 5-second time quantum."""
+    jobs = load_jobs()
+    
+    if not jobs:
+        print("\nNo jobs to schedule.\n")
+        return
+    
+    TIME_QUANTUM = 5
+    print(f"\n{'=' * 70}")
+    print(f"       ROUND ROBIN SCHEDULING (Time Quantum = {TIME_QUANTUM} seconds)")
+    print("=" * 70 + "\n")
+    
+    # Initialize remaining time for each job
+    for job in jobs:
+        job["remaining"] = job["exec_time"]
+    
+    execution_log = []
+    cycle = 1
+    
+    # Process jobs in round-robin fashion
+    while any(job["remaining"] > 0 for job in jobs):
+        print(f"--- Cycle {cycle} ---")
+        
+        for job in jobs:
+            if job["remaining"] <= 0:
+                continue
+            
+            # Determine how much time this job gets in this cycle
+            run_time = min(TIME_QUANTUM, job["remaining"])
+            job["remaining"] -= run_time
+            
+            print(
+                f"  Running: {job['job_name']} (Student: {job['student_id']}) "
+                f"for {run_time}s | Remaining: {job['remaining']}s"
+            )
+            
+            execution_log.append({
+                "student_id": job["student_id"],
+                "job_name": job["job_name"],
+                "run_time": run_time,
+                "remaining": job["remaining"]
+            })
+            
+            log_event(
+                f"RR_EXECUTION | Student={job['student_id']} | Job={job['job_name']} | "
+                f"RunTime={run_time}s | Remaining={job['remaining']}s"
+            )
+            
+            # If job completed, record it
+            if job["remaining"] == 0:
+                append_completed_job(job, "RoundRobin")
+                print(f"    ✓ Job '{job['job_name']}' COMPLETED")
+        
+        cycle += 1
+        print()
+    
+    # Clear the job queue
+    save_jobs([])
+    
+    print("=" * 70)
+    print("All jobs completed using Round Robin scheduling.")
+    print("=" * 70 + "\n")
+    
+    log_event(f"Round Robin scheduling completed: {len(jobs)} job(s) processed")
+
+def priority_scheduling() -> None:
+    """Process jobs using Priority scheduling (highest priority first)."""
+    jobs = load_jobs()
+    
+    if not jobs:
+        print("\nNo jobs to schedule.\n")
+        return
+    
+    print(f"\n{'=' * 70}")
+    print("          PRIORITY SCHEDULING (Highest Priority First)")
+    print("=" * 70 + "\n")
+    
+    # Sort jobs by priority in descending order (10 is highest priority)
+    sorted_jobs = sorted(jobs, key=lambda j: j["priority"], reverse=True)
+    
+    print(f"{'#':<4} {'Student ID':<12} {'Job Name':<20} {'Time(s)':<8} {'Priority':<8}")
+    print("-" * 70)
+    
+    for idx, job in enumerate(sorted_jobs, start=1):
+        print(
+            f"{idx:<4} {job['student_id']:<12} {job['job_name']:<20} "
+            f"{job['exec_time']:<8} {job['priority']:<8}"
+        )
+        
+        log_event(
+            f"PRIORITY_EXECUTION | Student={job['student_id']} | Job={job['job_name']} | "
+            f"ExecTime={job['exec_time']}s | Priority={job['priority']}"
+        )
+        
+        # Record completed job
+        append_completed_job(job, "Priority")
+    
+    # Clear the job queue
+    save_jobs([])
+    
+    print("\n" + "=" * 70)
+    print("All jobs completed using Priority scheduling.")
+    print("=" * 70 + "\n")
+    
+    log_event(f"Priority scheduling completed: {len(sorted_jobs)} job(s) processed")
