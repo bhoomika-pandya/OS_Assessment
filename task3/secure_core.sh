@@ -250,3 +250,207 @@ submit_assignment() {
     
     echo ""
 }
+
+
+#############################################################################
+# VIEW STUDENT'S OWN SUBMISSIONS
+#############################################################################
+view_my_submissions() {
+    echo ""
+    echo "============================================================"
+    echo "                  MY SUBMISSIONS"
+    echo "============================================================"
+    echo ""
+    
+    read -p "Enter your Student ID: " student_id
+    student_id=$(echo "$student_id" | xargs)
+    
+    if [ -z "$student_id" ]; then
+        echo -e "${RED}Error: Student ID cannot be empty.${NC}"
+        return
+    fi
+    
+    # Filter submissions for this student
+    local submissions=$(grep "^${student_id}|" "$SUBMISSIONS_INDEX" 2>/dev/null)
+    
+    if [ -z "$submissions" ]; then
+        echo "No submissions found for Student ID: $student_id"
+    else
+        echo "Submissions for Student ID: $student_id"
+        echo "------------------------------------------------------------"
+        printf "%-30s %-20s\n" "FILENAME" "SUBMISSION DATE"
+        echo "------------------------------------------------------------"
+        
+        echo "$submissions" | while IFS='|' read -r sid filename hash timestamp; do
+            printf "%-30s %-20s\n" "$filename" "$timestamp"
+        done
+    fi
+    
+    echo ""
+}
+
+
+#############################################################################
+# LIST ALL SUBMISSIONS (ADMIN VIEW)
+#############################################################################
+list_all_submissions() {
+    echo ""
+    echo "============================================================"
+    echo "              ALL SUBMISSIONS (ADMIN VIEW)"
+    echo "============================================================"
+    echo ""
+    
+    if [ ! -s "$SUBMISSIONS_INDEX" ]; then
+        echo "No submissions recorded yet."
+    else
+        local count=$(wc -l < "$SUBMISSIONS_INDEX")
+        echo "Total submissions: $count"
+        echo "------------------------------------------------------------"
+        printf "%-12s %-30s %-20s\n" "STUDENT ID" "FILENAME" "SUBMISSION DATE"
+        echo "------------------------------------------------------------"
+        
+        while IFS='|' read -r student_id filename hash timestamp; do
+            printf "%-12s %-30s %-20s\n" "$student_id" "$filename" "$timestamp"
+        done < "$SUBMISSIONS_INDEX"
+    fi
+    
+    echo ""
+}
+
+#############################################################################
+# LOGIN / ACCOUNT MANAGEMENT
+#############################################################################
+account_login() {
+    echo ""
+    echo "============================================================"
+    echo "           ACCOUNT LOGIN & SECURITY CHECK"
+    echo "============================================================"
+    echo ""
+    
+    # Check if login monitor script exists
+    if [ ! -f "$LOGIN_MONITOR_SCRIPT" ]; then
+        echo -e "${RED}Error: Login monitoring system not found.${NC}"
+        echo "Expected: $LOGIN_MONITOR_SCRIPT"
+        return
+    fi
+    
+    # Call the Python login monitor with the log file path
+    # Support py launcher (Windows), python3 (Linux/macOS), python (fallback)
+    if command -v py &>/dev/null; then
+        py "$LOGIN_MONITOR_SCRIPT" "$SUBMISSION_LOG"
+    elif command -v python3 &>/dev/null && python3 --version &>/dev/null 2>&1; then
+        python3 "$LOGIN_MONITOR_SCRIPT" "$SUBMISSION_LOG"
+    elif command -v python &>/dev/null; then
+        python "$LOGIN_MONITOR_SCRIPT" "$SUBMISSION_LOG"
+    else
+        echo -e "${RED}Error: Python is not installed or not in PATH.${NC}"
+    fi
+    
+    echo ""
+}
+
+
+#############################################################################
+# EXIT WITH CONFIRMATION
+#############################################################################
+exit_system() {
+    echo ""
+    echo "============================================================"
+    echo "                    EXIT CONFIRMATION"
+    echo "============================================================"
+    echo ""
+    
+    while true; do
+        read -p "Are you sure you want to exit? (Y/N): " confirmation
+        confirmation=$(echo "$confirmation" | tr '[:lower:]' '[:upper:]')
+        
+        case "$confirmation" in
+            Y|YES)
+                echo ""
+                echo "============================================================"
+                echo "                         BYE!"
+                echo "   Thank you for using the Examination Submission System"
+                echo "============================================================"
+                echo ""
+                log_event "SYSTEM" "EXIT" "SHUTDOWN" "User initiated system exit"
+                exit 0
+                ;;
+            N|NO)
+                echo "Exit cancelled. Returning to main menu..."
+                return
+                ;;
+            *)
+                echo -e "${YELLOW}Invalid input. Please enter Y or N.${NC}"
+                ;;
+        esac
+    done
+}
+
+#############################################################################
+# DISPLAY MENU
+#############################################################################
+display_menu() {
+    echo ""
+    echo "============================================================"
+    echo "   SECURE EXAMINATION SUBMISSION AND ACCESS CONTROL SYSTEM"
+    echo "============================================================"
+    echo ""
+    echo "  1. Submit Assignment"
+    echo "  2. View My Submissions"
+    echo "  3. List All Submissions (Admin)"
+    echo "  4. Login / Account Management"
+    echo "  5. Exit (Bye)"
+    echo ""
+    echo "============================================================"
+}
+
+
+#############################################################################
+# MAIN PROGRAM LOOP
+#############################################################################
+main() {
+    # Initialize the system
+    initialize_system
+    
+    echo ""
+    echo "============================================================"
+    echo "   SECURE EXAMINATION SUBMISSION SYSTEM - INITIALIZED"
+    echo "============================================================"
+    echo ""
+    
+    # Main menu loop
+    while true; do
+        display_menu
+        
+        read -p "Enter your choice [1-5]: " choice
+        
+        case "$choice" in
+            1)
+                submit_assignment
+                ;;
+            2)
+                view_my_submissions
+                ;;
+            3)
+                list_all_submissions
+                ;;
+            4)
+                account_login
+                ;;
+            5)
+                exit_system
+                ;;
+            *)
+                echo ""
+                echo -e "${RED}Invalid choice. Please select a number between 1 and 5.${NC}"
+                echo ""
+                ;;
+        esac
+        
+        # Pause before showing menu again
+        read -p "Press Enter to continue..."
+    done
+}
+
+# Run the main program
+main
