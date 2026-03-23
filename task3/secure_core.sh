@@ -110,3 +110,90 @@ def create_account(accounts: dict) -> None:
     save_accounts(accounts)
     print(f"\n  Account '{username}' ({role}) created successfully.")
     log_login_event(username, "ACCOUNT_CREATED", f"New {role} account registered")
+
+def login(accounts: dict) -> None:
+    """Authenticate a user and handle lockout logic."""
+    print("\n  --- Login ---")
+    username = input("  Username: ").strip()
+
+    if not username:
+        print("  Error: Username cannot be empty.")
+        return
+
+    if username not in accounts:
+        print("  Error: Account not found.")
+        log_login_event(username, "FAILED", "Account not found")
+        return
+
+    account = accounts[username]
+
+    # Check lockout
+    locked, remaining = get_lockout_status(account)
+    if locked:
+        print(f"\n  Account is LOCKED due to too many failed attempts.")
+        print(f"  Try again in {remaining} minute(s).")
+        log_login_event(username, "BLOCKED", f"Account locked, {remaining} min remaining")
+        return
+
+    # Reset expired lockout
+    if not locked and account.get("failed_attempts", 0) >= MAX_FAILED_ATTEMPTS:
+        account["failed_attempts"] = 0
+        account["lockout_time"] = None
+
+    password = input("  Password: ").strip()
+    entered_hash = hash_password(password)
+
+    if entered_hash == account["password_hash"]:
+        account["failed_attempts"] = 0
+        account["lockout_time"] = None
+        account["last_login"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        save_accounts(accounts)
+
+        print(f"\n  Login successful! Welcome, {username} ({account['role']}).")
+        print(f"  Last login: {account.get('last_login', 'First login')}")
+        log_login_event(username, "SUCCESS", f"Successful login as {account['role']}")
+    else:
+        account["failed_attempts"] = account.get("failed_attempts", 0) + 1
+        attempts_left = MAX_FAILED_ATTEMPTS - account["failed_attempts"]
+
+        if account["failed_attempts"] >= MAX_FAILED_ATTEMPTS:
+            account["lockout_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            save_accounts(accounts)
+            print(f"\n  Incorrect password. Account is now LOCKED for {LOCKOUT_DURATION_MINUTES} minutes.")
+            log_login_event(username, "LOCKED", f"Account locked after {MAX_FAILED_ATTEMPTS} failed attempts")
+        else:
+            save_accounts(accounts)
+            print(f"\n  Incorrect password. {attempts_left} attempt(s) remaining before lockout.")
+            log_login_event(username, "FAILED", f"Wrong password, {attempts_left} attempts left")
+
+
+def view_login_history(log_file: str) -> None:
+    """Display recent login attempts from the login log."""
+    print("\n  --- Login Attempt History ---")
+
+    if not os.path.exists(LOGIN_LOG_FILE):
+        print("  No login history found.")
+        return
+
+    try:
+        with open(LOGIN_LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if not lines:
+            print("  No login history found.")
+            return
+
+        print(f"\n  {'TIMESTAMP':<22} {'USER':<15} {'STATUS':<15} DETAILS")
+        print("  " + "-" * 70)
+
+        for line in lines[-20:]:  # Show last 20 entries
+            parts = line.strip().split(" | ")
+            if len(parts) >= 3:
+                timestamp = parts[0] if len(parts) > 0 else "N/A"
+                user = parts[1].replace("USER=", "") if len(parts) > 1 else "N/A"
+                status = parts[2].replace("STATUS=", "") if len(parts) > 2 else "N/A"
+                details = parts[3] if len(parts) > 3 else ""
+                print(f"  {timestamp:<22} {user:<15} {status:<15} {details}")
+    except IOError:
+        print("  Error reading login history.")
+
